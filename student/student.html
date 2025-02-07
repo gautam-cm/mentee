@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MENTEE FORM</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+    </script>
+</head>
+<body>
+    <form id="menteeForm">
+        <h2>STUDENT INFORMATION FORM</h2>
+        <label>Name:</label>
+        <input type="text" id="name" required><br><br>
+
+        <label>Roll No.:</label>
+        <input type="text" id="roll_no" required><br><br>
+
+        <label>Email ID:</label>
+        <input type="email" id="email_id" required><br><br>
+
+        <label>Contact No.:</label>
+        <input type="text" id="contact_no" required pattern="[0-9]{10}" title="Please enter a valid 10-digit phone number"><br><br>
+
+        <input type="submit" value="Submit">
+    </form>
+
+    <script>
+        document.getElementById('menteeForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const name = document.getElementById('name').value;
+            const roll_no = document.getElementById('roll_no').value;
+            const email_id = document.getElementById('email_id').value;
+            const contact_no = document.getElementById('contact_no').value;
+            const password = "student123"; // Default password
+
+            try {
+                // Register user with Firebase Authentication
+                const userCredential = await auth.createUserWithEmailAndPassword(email_id, password);
+                const user = userCredential.user;
+
+                // Store user details in Firestore
+                await db.collection("students").doc(user.uid).set({
+                    name,
+                    roll_no,
+                    email_id,
+                    contact_no,
+                    userId: user.uid
+                });
+
+                alert("Student registration successful! Your default password is: student123");
+                window.location.href = "mentee_dashboard.html";
+            } catch (error) {
+                alert(error.message);
+                console.error("Error:", error);
+            }
+        });
+    </script>
+</body>
+</html>

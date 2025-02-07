@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+
+    <style>
+        body { background: linear-gradient(135deg, #74b9ff, #a29bfe); min-height: 100vh; padding: 20px; }
+        .container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.1); margin-top: 20px; }
+        .student-item { cursor: pointer; padding: 15px; margin-bottom: 10px; border-radius: 8px; background: white; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .student-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .leave-item { border-left: 4px solid #007bff; padding: 15px; margin: 10px 0; background: white; border-radius: 4px; }
+        .status-pending { border-left-color: #ffc107; }
+        .status-approved { border-left-color: #28a745; }
+        .status-rejected { border-left-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Teacher Dashboard</h2>
+            <button class="btn btn-danger" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <h4>My Students</h4>
+                <div id="studentList"></div>
+            </div>
+
+            <div class="col-md-8">
+                <div id="studentDetails" style="display: none;">
+                    <h4>Personal Information</h4>
+                    <img id="studentPhoto" src="/default-profile.jpg" alt="Student Photo" style="width: 150px; height: 150px; border-radius: 50%;">
+                    <div id="personalInfo"></div>
+
+                    <h4>Leave Applications</h4>
+                    <div id="leaveApplications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Check authentication
+        firebase.auth().onAuthStateChanged((user) => {
+            if (!user) {
+                window.location.href = 'sign.html';
+            } else {
+                loadAssignedStudents(user.uid);
+            }
+        });
+
+        // Logout function
+        function logout() {
+            auth.signOut().then(() => {
+                window.location.href = 'sign.html';
+            });
+        }
+
+        // Load students assigned to the faculty
+        function loadAssignedStudents(facultyId) {
+            db.collection('students')
+                .where('assignedMentor', '==', facultyId)
+                .get()
+                .then((querySnapshot) => {
+                    const studentList = document.getElementById('studentList');
+                    studentList.innerHTML = '';
+
+                    if (querySnapshot.empty) {
+                        studentList.innerHTML = '<p>No students assigned yet.</p>';
+                        return;
+                    }
+
+                    querySnapshot.forEach((doc) => {
+                        const student = doc.data();
+                        const div = document.createElement('div');
+                        div.className = 'student-item';
+                        div.innerHTML = `<h5>${student.name}</h5><p>Roll No: ${student.rollNo}</p>`;
+                        div.onclick = () => loadStudentDetails(doc.id);
+                        studentList.appendChild(div);
+                    });
+                })
+                .catch((error) => console.error('Error loading students:', error));
+        }
+
+        // Load student details
+        function loadStudentDetails(studentId) {
+            document.getElementById('studentDetails').style.display = 'block';
+
+            db.collection('students').doc(studentId).get().then((doc) => {
+                if (doc.exists) {
+                    const student = doc.data();
+                    document.getElementById('studentPhoto').src = student.photoUrl || '/default-profile.jpg';
+
+                    document.getElementById('personalInfo').innerHTML = `
+                        <p><strong>Name:</strong> ${student.name}</p>
+                        <p><strong>Roll No:</strong> ${student.rollNo}</p>
+                        <p><strong>Email:</strong> ${student.email}</p>
+                        <p><strong>Contact:</strong> ${student.contact || 'N/A'}</p>
+                        <p><strong>Department:</strong> ${student.department}</p>
+                        <p><strong>Year:</strong> ${student.year}</p>
+                    `;
+
+                    loadLeaveApplications(studentId);
+                } else {
+                    alert('Student not found');
+                }
+            }).catch((error) => console.error('Error fetching student details:', error));
+        }
+
+        // Load leave applications
+        function loadLeaveApplications(studentId) {
+            db.collection('students').doc(studentId).collection('leaveApplications').get()
+                .then((querySnapshot) => {
+                    const leaveApplications = document.getElementById('leaveApplications');
+                    leaveApplications.innerHTML = '';
+
+                    if (querySnapshot.empty) {
+                        leaveApplications.innerHTML = '<p>No leave applications found.</p>';
+                        return;
+                    }
+
+                    querySnapshot.forEach((doc) => {
+                        const leave = doc.data();
+                        leaveApplications.innerHTML += `
+                            <div class="leave-item status-${leave.status}">
+                                <p><strong>From:</strong> ${leave.fromDate} <strong>To:</strong> ${leave.toDate}</p>
+                                <p><strong>Reason:</strong> ${leave.reason}</p>
+                                ${leave.status === 'pending' ? `
+                                    <button class="btn btn-success btn-sm" onclick="updateLeaveStatus('${studentId}', '${doc.id}', 'approved')">Approve</button>
+                                    <button class="btn btn-danger btn-sm" onclick="updateLeaveStatus('${studentId}', '${doc.id}', 'rejected')">Reject</button>
+                                ` : `<span class="badge bg-${leave.status === 'approved' ? 'success' : 'danger'}">${leave.status.toUpperCase()}</span>`}
+                            </div>
+                        `;
+                    });
+                })
+                .catch((error) => console.error('Error fetching leave applications:', error));
+        }
+
+        // Update leave status
+        function updateLeaveStatus(studentId, leaveId, status) {
+            db.collection('students').doc(studentId).collection('leaveApplications').doc(leaveId)
+                .update({ status: status })
+                .then(() => {
+                    alert(`Leave application ${status}`);
+                    loadLeaveApplications(studentId);
+                })
+                .catch((error) => console.error('Error updating leave status:', error));
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
